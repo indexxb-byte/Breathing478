@@ -3,25 +3,35 @@ package com.example.breathing478
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.view.HapticFeedbackConstants
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlin.math.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,32 +52,79 @@ fun BreathingApp() {
     var phase by remember { mutableStateOf(BreathingPhase.IDLE) }
     var timerText by remember { mutableStateOf("4") }
     var isRunning by remember { mutableStateOf(false) }
-    var roundCount by remember { mutableStateOf(0) }
-    var totalRounds by remember { mutableStateOf(4) }
+    var elapsedSeconds by remember { mutableStateOf(0) }
+    var totalMinutes by remember { mutableStateOf(3) }
+    var totalSeconds by remember { mutableStateOf(180) }
     var phaseLabel by remember { mutableStateOf("Готовы?") }
+    var phaseProgress by remember { mutableStateOf(0f) }
+    var sessionCompleted by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
+    val view = LocalView.current
     val vibrator = context.getSystemService(Vibrator::class.java)
 
-    val animatedScale = remember { Animatable(0.3f) }
+    val animatedScale = remember { Animatable(0.35f) }
+    val rotation = remember { Animatable(0f) }
+    val glowAlpha = remember { Animatable(0.3f) }
+    val particles = remember { mutableStateListOf<Particle>() }
+
+    // Цвет темы
+    val themeColor = when (phase) {
+        BreathingPhase.INHALE -> Color(0xFF64B5F6)
+        BreathingPhase.HOLD -> Color(0xFFFFD54F)
+        BreathingPhase.EXHALE -> Color(0xFF81C784)
+        BreathingPhase.IDLE -> Color(0xFF90A4AE)
+    }
+
+    val bgColor = when (phase) {
+        BreathingPhase.INHALE -> Color(0xFF0D1B2A)
+        BreathingPhase.HOLD -> Color(0xFF1A0A00)
+        BreathingPhase.EXHALE -> Color(0xFF0A1A0A)
+        BreathingPhase.IDLE -> Color(0xFF121212)
+    }
 
     LaunchedEffect(phase) {
         when (phase) {
             BreathingPhase.INHALE -> {
-                animatedScale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 4000, easing = FastOutSlowInEasing)
-                )
+                animatedScale.animateTo(1f, animationSpec = tween(4000, easing = FastOutSlowInEasing))
+                glowAlpha.animateTo(0.8f, animationSpec = tween(4000))
             }
             BreathingPhase.EXHALE -> {
-                animatedScale.animateTo(
-                    targetValue = 0.3f,
-                    animationSpec = tween(durationMillis = 8000, easing = FastOutSlowInEasing)
+                animatedScale.animateTo(0.35f, animationSpec = tween(8000, easing = FastOutSlowInEasing))
+                glowAlpha.animateTo(0.2f, animationSpec = tween(8000))
+            }
+            BreathingPhase.HOLD -> {
+                glowAlpha.animateTo(0.6f, animationSpec = tween(500))
+            }
+            BreathingPhase.IDLE -> {
+                animatedScale.snapTo(0.35f)
+                glowAlpha.snapTo(0.3f)
+            }
+        }
+    }
+
+    // Партиклы
+    LaunchedEffect(isRunning, phase) {
+        while (isRunning) {
+            if (phase != BreathingPhase.IDLE) {
+                particles.add(
+                    Particle(
+                        angle = random() * 360f,
+                        distance = random() * 50f + 80f,
+                        alpha = 1f,
+                        size = random() * 3f + 1f
+                    )
+                )
+                if (particles.size > 30) particles.removeAt(0)
+            }
+            particles.forEachIndexed { i, p ->
+                particles[i] = p.copy(
+                    distance = p.distance + 2f,
+                    alpha = (p.alpha - 0.02f).coerceAtLeast(0f)
                 )
             }
-            BreathingPhase.HOLD -> { /* держим размер */ }
-            BreathingPhase.IDLE -> {
-                animatedScale.snapTo(0.3f)
-            }
+            particles.removeAll { it.alpha <= 0f }
+            delay(50)
         }
     }
 
@@ -76,154 +133,291 @@ fun BreathingApp() {
             phase = BreathingPhase.IDLE
             timerText = "4"
             phaseLabel = "Готовы?"
+            elapsedSeconds = 0
+            sessionCompleted = false
             return@LaunchedEffect
         }
 
-        var currentRound = 0
-        while (currentRound < totalRounds && isRunning) {
+        elapsedSeconds = 0
+        totalSeconds = totalMinutes * 60
+        sessionCompleted = false
+
+        while (elapsedSeconds < totalSeconds && isRunning) {
             // Вдох 4 сек
             phase = BreathingPhase.INHALE
             phaseLabel = "Вдох"
-            vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            for (i in 4 downTo 1) {
-                timerText = i.toString()
+            vibrateTick(vibrator)
+            for (i in 1..4) {
+                if (!isRunning) return@LaunchedEffect
+                timerText = (5 - i).toString()
+                phaseProgress = i / 4f
                 delay(1000)
+                elapsedSeconds++
+                if (elapsedSeconds >= totalSeconds) break
             }
+            if (elapsedSeconds >= totalSeconds) break
 
             // Задержка 7 сек
             phase = BreathingPhase.HOLD
             phaseLabel = "Задержка"
-            vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            for (i in 7 downTo 1) {
-                timerText = i.toString()
+            vibrateHold(vibrator)
+            for (i in 1..7) {
+                if (!isRunning) return@LaunchedEffect
+                timerText = (8 - i).toString()
+                phaseProgress = i / 7f
                 delay(1000)
+                elapsedSeconds++
+                if (elapsedSeconds >= totalSeconds) break
             }
+            if (elapsedSeconds >= totalSeconds) break
 
             // Выдох 8 сек
             phase = BreathingPhase.EXHALE
             phaseLabel = "Выдох"
-            vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            for (i in 8 downTo 1) {
-                timerText = i.toString()
+            vibrateTick(vibrator)
+            for (i in 1..8) {
+                if (!isRunning) return@LaunchedEffect
+                timerText = (9 - i).toString()
+                phaseProgress = i / 8f
                 delay(1000)
+                elapsedSeconds++
+                if (elapsedSeconds >= totalSeconds) break
             }
-
-            currentRound++
-            roundCount = currentRound
         }
 
         isRunning = false
         phase = BreathingPhase.IDLE
         timerText = "✓"
         phaseLabel = "Готово!"
-        roundCount = 0
+        sessionCompleted = true
+        vibrateLong(vibrator)
     }
 
-    // UI
+    // Вибрация при скролле минут
+    fun vibrateScroll() {
+        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = when (phase) {
-                        BreathingPhase.INHALE -> listOf(Color(0xFF0D47A1), Color(0xFF1565C0))
-                        BreathingPhase.HOLD -> listOf(Color(0xFFE65100), Color(0xFFEF6C00))
-                        BreathingPhase.EXHALE -> listOf(Color(0xFF1B5E20), Color(0xFF2E7D32))
-                        BreathingPhase.IDLE -> listOf(Color(0xFF263238), Color(0xFF37474F))
-                    }
-                )
-            ),
+            .background(bgColor),
         contentAlignment = Alignment.Center
     ) {
+        // Фоновые частицы
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            particles.forEach { p ->
+                val rad = Math.toRadians(p.angle.toDouble())
+                val cx = center.x + cos(rad).toFloat() * p.distance
+                val cy = center.y + sin(rad).toFloat() * p.distance
+                drawCircle(
+                    color = themeColor.copy(alpha = p.alpha * 0.3f),
+                    radius = p.size,
+                    center = Offset(cx, cy)
+                )
+            }
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier.padding(24.dp)
         ) {
-            Text(
-                text = "4-7-8 Дыхание",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
+            if (!isRunning) {
+                Text(
+                    text = "4-7-8",
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.9f),
+                    letterSpacing = 8.sp
+                )
+                Text(
+                    text = "ДЫХАНИЕ",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Light,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 12.sp
+                )
+                Spacer(modifier = Modifier.height(48.dp))
+            }
 
             // Анимированный круг
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(220.dp)
+                modifier = Modifier.size(240.dp)
             ) {
-                Canvas(modifier = Modifier.size(220.dp)) {
-                    val centerX = size.width / 2
-                    val centerY = size.height / 2
-                    val radius = size.width / 2 * animatedScale.value
+                // Свечение
+                Canvas(modifier = Modifier.size(240.dp)) {
+                    val cx = size.width / 2
+                    val cy = size.height / 2
+                    val baseRadius = size.width / 2 * animatedScale.value
 
+                    // Внешнее свечение
+                    for (i in 3 downTo 0) {
+                        drawCircle(
+                            color = themeColor.copy(alpha = glowAlpha.value * 0.05f),
+                            radius = baseRadius + i * 20f + 10f,
+                            center = Offset(cx, cy)
+                        )
+                    }
+
+                    // Кольцо прогресса
+                    if (phase != BreathingPhase.IDLE) {
+                        drawCircle(
+                            color = themeColor.copy(alpha = 0.4f),
+                            radius = baseRadius + 15f,
+                            center = Offset(cx, cy),
+                            style = Stroke(width = 3f)
+                        )
+                        drawArc(
+                            color = themeColor,
+                            startAngle = -90f,
+                            sweepAngle = 360f * phaseProgress,
+                            useCenter = false,
+                            topLeft = Offset(cx - baseRadius - 15f, cy - baseRadius - 15f),
+                            size = androidx.compose.ui.geometry.Size(
+                                (baseRadius + 15f) * 2,
+                                (baseRadius + 15f) * 2
+                            ),
+                            style = Stroke(width = 3f)
+                        )
+                    }
+
+                    // Основной круг
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.05f),
+                        radius = baseRadius,
+                        center = Offset(cx, cy)
+                    )
                     drawCircle(
                         color = Color.White.copy(alpha = 0.1f),
-                        radius = radius * 1.2f,
-                        center = Offset(centerX, centerY)
+                        radius = baseRadius * 0.9f,
+                        center = Offset(cx, cy)
                     )
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.3f),
-                        radius = radius,
-                        center = Offset(centerX, centerY)
-                    )
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.6f),
-                        radius = radius * 0.8f,
-                        center = Offset(centerX, centerY)
+                        color = Color.White.copy(alpha = 0.2f),
+                        radius = baseRadius * 0.75f,
+                        center = Offset(cx, cy)
                     )
                 }
 
-                Text(
-                    text = timerText,
-                    fontSize = 64.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = phaseLabel,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.9f)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (isRunning) {
-                Text(
-                    text = "Раунд $roundCount из $totalRounds",
-                    fontSize = 16.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = timerText,
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    if (isRunning) {
+                        Text(
+                            text = phaseLabel,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = themeColor,
+                            letterSpacing = 4.sp
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                listOf(2, 4, 6, 8).forEach { rounds ->
-                    FilterChip(
-                        selected = totalRounds == rounds,
-                        onClick = { if (!isRunning) totalRounds = rounds },
-                        label = { Text("${rounds}р", color = Color.White) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color.White.copy(alpha = 0.3f),
-                            containerColor = Color.White.copy(alpha = 0.1f)
+            if (!isRunning) {
+                // Выбор времени (скролл)
+                Text(
+                    text = "Длительность",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 4.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .height(60.dp)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragEnd = {
+                                    vibrateScroll()
+                                }
+                            ) { _, dragAmount ->
+                                val change = if (dragAmount < 0) 1 else -1
+                                totalMinutes = (totalMinutes + change).coerceIn(1, 10)
+                                vibrateScroll()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "▼",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.3f)
                         )
-                    )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "$totalMinutes",
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (totalMinutes == 1) "минута" 
+                                   else if (totalMinutes in 2..4) "минуты" 
+                                   else "минут",
+                            fontSize = 16.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "▲",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.3f)
+                        )
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                if (sessionCompleted) {
+                    Text(
+                        text = "Сеанс завершён!",
+                        fontSize = 16.sp,
+                        color = Color(0xFF81C784),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            } else {
+                // Прогресс-бар времени
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = formatTime(elapsedSeconds, totalSeconds),
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(200.dp)
+                            .height(2.dp)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(fraction = elapsedSeconds.toFloat() / totalSeconds)
+                                .background(themeColor)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // Кнопка
             Button(
                 onClick = {
                     if (isRunning) {
@@ -231,9 +425,9 @@ fun BreathingApp() {
                         phase = BreathingPhase.IDLE
                         timerText = "4"
                         phaseLabel = "Готовы?"
-                        roundCount = 0
+                        elapsedSeconds = 0
                     } else {
-                        roundCount = 0
+                        elapsedSeconds = 0
                         isRunning = true
                     }
                 },
@@ -243,15 +437,57 @@ fun BreathingApp() {
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isRunning) Color(0xFFE53935) else Color.White,
-                    contentColor = if (isRunning) Color.White else Color(0xFF1A237E)
+                    contentColor = if (isRunning) Color.White else Color(0xFF0D1B2A)
                 )
             ) {
                 Text(
-                    text = if (isRunning) "СТОП" else "СТАРТ",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                    text = if (isRunning) "ЗАВЕРШИТЬ" else "НАЧАТЬ",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 4.sp
                 )
             }
         }
     }
+}
+
+data class Particle(
+    val angle: Float,
+    val distance: Float,
+    val alpha: Float,
+    val size: Float
+)
+
+fun vibrateTick(vibrator: Vibrator?) {
+    // Короткий толчок при смене фазы
+    vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+}
+
+fun vibrateHold(vibrator: Vibrator?) {
+    // Двойной толчок при задержке
+    vibrator?.vibrate(
+        VibrationEffect.createWaveform(
+            longArrayOf(0, 50, 50, 50),
+            intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE),
+            -1
+        )
+    )
+}
+
+fun vibrateLong(vibrator: Vibrator?) {
+    // Завершающая вибрация
+    vibrator?.vibrate(
+        VibrationEffect.createWaveform(
+            longArrayOf(0, 100, 100, 200),
+            intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 80, VibrationEffect.DEFAULT_AMPLITUDE),
+            -1
+        )
+    )
+}
+
+fun formatTime(elapsed: Int, total: Int): String {
+    val remain = (total - elapsed).coerceAtLeast(0)
+    val min = remain / 60
+    val sec = remain % 60
+    return "Осталось ${min}:${sec.toString().padStart(2, '0')}"
 }
