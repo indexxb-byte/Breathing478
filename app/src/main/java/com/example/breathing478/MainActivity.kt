@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.*
 import kotlin.random.Random
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,8 +72,7 @@ fun BreathingApp() {
     val particles = remember { mutableStateListOf<Particle>() }
 
     // Плавный скролл
-    var displayMinutes by remember { mutableFloatStateOf(totalMinutes.toFloat()) }
-    val scrollAnimatable = remember { Animatable(totalMinutes.toFloat()) }
+    var scrollValue by remember { mutableFloatStateOf(totalMinutes.toFloat()) }
 
     val themeColor = when (phase) {
         BreathingPhase.INHALE -> Color(0xFF64B5F6)
@@ -152,10 +152,8 @@ fun BreathingApp() {
         val cycleDuration = mode.inhale + mode.holdIn + mode.exhale + mode.holdOut
 
         while (isRunning) {
-            // Проверяем, хватит ли времени на полный цикл
             if (elapsedSeconds + cycleDuration > totalSeconds) break
 
-            // Вдох
             phase = BreathingPhase.INHALE
             phaseLabel = "Вдох"
             vibrateTick(vibrator)
@@ -167,7 +165,6 @@ fun BreathingApp() {
                 elapsedSeconds++
             }
 
-            // Задержка на вдохе
             if (mode.holdIn > 0) {
                 phase = BreathingPhase.HOLD_IN
                 phaseLabel = "Задержка"
@@ -181,7 +178,6 @@ fun BreathingApp() {
                 }
             }
 
-            // Выдох
             phase = BreathingPhase.EXHALE
             phaseLabel = "Выдох"
             vibrateTick(vibrator)
@@ -193,7 +189,6 @@ fun BreathingApp() {
                 elapsedSeconds++
             }
 
-            // Задержка на выдохе (только для 4-4-4-4)
             if (mode.holdOut > 0) {
                 phase = BreathingPhase.HOLD_OUT
                 phaseLabel = "Пауза"
@@ -261,7 +256,6 @@ fun BreathingApp() {
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Переключатель режима
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     BreathingMode.entries.forEach { mode ->
                         FilterChip(
@@ -279,7 +273,6 @@ fun BreathingApp() {
                 Spacer(modifier = Modifier.height(48.dp))
             }
 
-            // Круг
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(240.dp)
@@ -345,23 +338,19 @@ fun BreathingApp() {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Плавный скролл с прилипанием
-                val targetMinutes by remember { derivedStateOf { kotlin.math.roundToInt(scrollAnimatable.value).toFloat() } }
+                val displayMinutes = scrollValue.roundToInt().coerceIn(1, 10)
 
                 Box(
                     modifier = Modifier
                         .height(60.dp)
                         .pointerInput(Unit) {
                             detectVerticalDragGestures(
-                                onDrag = { _, dragAmount ->
-                                    scrollAnimatable.snapTo(
-                                        (scrollAnimatable.value - dragAmount / 50f).coerceIn(1f, 10f)
-                                    )
+                                onVerticalDrag = { _, dragAmount ->
+                                    scrollValue = (scrollValue - dragAmount / 50f).coerceIn(1f, 10f)
                                 },
                                 onDragEnd = {
-                                    val snapped = kotlin.math.roundToInt(scrollAnimatable.value).coerceIn(1, 10)
-                                    scrollAnimatable.animateTo(snapped.toFloat(), animationSpec = spring(dampingRatio = 0.6f))
-                                    totalMinutes = snapped
+                                    scrollValue = scrollValue.roundToInt().toFloat()
+                                    totalMinutes = scrollValue.roundToInt().coerceIn(1, 10)
                                     vibrateScroll()
                                 }
                             )
@@ -371,17 +360,12 @@ fun BreathingApp() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(text = "▼", fontSize = 12.sp, color = Color.White.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "${kotlin.math.roundToInt(scrollAnimatable.value)}",
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        Text(text = "$displayMinutes", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = when {
-                                kotlin.math.roundToInt(scrollAnimatable.value) == 1 -> "минута"
-                                kotlin.math.roundToInt(scrollAnimatable.value) in 2..4 -> "минуты"
+                            text = when (displayMinutes) {
+                                1 -> "минута"
+                                in 2..4 -> "минуты"
                                 else -> "минут"
                             },
                             fontSize = 16.sp,
@@ -395,12 +379,7 @@ fun BreathingApp() {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 if (sessionCompleted) {
-                    Text(
-                        text = "Сеанс завершён!",
-                        fontSize = 16.sp,
-                        color = Color(0xFF81C784),
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(text = "Сеанс завершён!", fontSize = 16.sp, color = Color(0xFF81C784), fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             } else {
@@ -431,7 +410,7 @@ fun BreathingApp() {
                         elapsedSeconds = 0
                     } else {
                         elapsedSeconds = 0
-                        totalMinutes = kotlin.math.roundToInt(scrollAnimatable.value).coerceIn(1, 10)
+                        totalMinutes = scrollValue.roundToInt().coerceIn(1, 10)
                         isRunning = true
                     }
                 },
