@@ -36,6 +36,7 @@ enum class BreathingPhase {
     INHALE, HOLD, EXHALE, IDLE
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BreathingApp() {
     var phase by remember { mutableStateOf(BreathingPhase.IDLE) }
