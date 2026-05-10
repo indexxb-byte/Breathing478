@@ -71,8 +71,9 @@ fun BreathingApp() {
     val glowAlpha = remember { Animatable(0.3f) }
     val particles = remember { mutableStateListOf<Particle>() }
 
-    // Плавный скролл
+    // Плавный скролл с вибрацией при каждой смене минуты
     var scrollValue by remember { mutableFloatStateOf(totalMinutes.toFloat()) }
+    var lastVibratedMinute by remember { mutableIntStateOf(totalMinutes) }
 
     val themeColor = when (phase) {
         BreathingPhase.INHALE -> Color(0xFF64B5F6)
@@ -346,11 +347,19 @@ fun BreathingApp() {
                         .pointerInput(Unit) {
                             detectVerticalDragGestures(
                                 onVerticalDrag = { _, dragAmount ->
-                                    scrollValue = (scrollValue - dragAmount / 50f).coerceIn(1f, 10f)
+                                    val newValue = (scrollValue - dragAmount / 50f).coerceIn(1f, 10f)
+                                    val newMinute = newValue.roundToInt()
+                                    // Вибрация при каждой смене минуты
+                                    if (newMinute != lastVibratedMinute) {
+                                        lastVibratedMinute = newMinute
+                                        vibrateScroll()
+                                    }
+                                    scrollValue = newValue
                                 },
                                 onDragEnd = {
                                     scrollValue = scrollValue.roundToInt().toFloat()
                                     totalMinutes = scrollValue.roundToInt().coerceIn(1, 10)
+                                    lastVibratedMinute = totalMinutes
                                     vibrateScroll()
                                 }
                             )
