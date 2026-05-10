@@ -11,19 +11,16 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -32,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.*
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,11 +62,9 @@ fun BreathingApp() {
     val vibrator = context.getSystemService(Vibrator::class.java)
 
     val animatedScale = remember { Animatable(0.35f) }
-    val rotation = remember { Animatable(0f) }
     val glowAlpha = remember { Animatable(0.3f) }
     val particles = remember { mutableStateListOf<Particle>() }
 
-    // Цвет темы
     val themeColor = when (phase) {
         BreathingPhase.INHALE -> Color(0xFF64B5F6)
         BreathingPhase.HOLD -> Color(0xFFFFD54F)
@@ -103,16 +99,15 @@ fun BreathingApp() {
         }
     }
 
-    // Партиклы
     LaunchedEffect(isRunning, phase) {
         while (isRunning) {
             if (phase != BreathingPhase.IDLE) {
                 particles.add(
                     Particle(
-                        angle = random() * 360f,
-                        distance = random() * 50f + 80f,
+                        angle = Random.nextFloat() * 360f,
+                        distance = Random.nextFloat() * 50f + 80f,
                         alpha = 1f,
-                        size = random() * 3f + 1f
+                        size = Random.nextFloat() * 3f + 1f
                     )
                 )
                 if (particles.size > 30) particles.removeAt(0)
@@ -193,7 +188,6 @@ fun BreathingApp() {
         vibrateLong(vibrator)
     }
 
-    // Вибрация при скролле минут
     fun vibrateScroll() {
         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
@@ -204,7 +198,6 @@ fun BreathingApp() {
             .background(bgColor),
         contentAlignment = Alignment.Center
     ) {
-        // Фоновые частицы
         Canvas(modifier = Modifier.fillMaxSize()) {
             particles.forEach { p ->
                 val rad = Math.toRadians(p.angle.toDouble())
@@ -241,18 +234,15 @@ fun BreathingApp() {
                 Spacer(modifier = Modifier.height(48.dp))
             }
 
-            // Анимированный круг
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(240.dp)
             ) {
-                // Свечение
                 Canvas(modifier = Modifier.size(240.dp)) {
                     val cx = size.width / 2
                     val cy = size.height / 2
                     val baseRadius = size.width / 2 * animatedScale.value
 
-                    // Внешнее свечение
                     for (i in 3 downTo 0) {
                         drawCircle(
                             color = themeColor.copy(alpha = glowAlpha.value * 0.05f),
@@ -261,7 +251,6 @@ fun BreathingApp() {
                         )
                     }
 
-                    // Кольцо прогресса
                     if (phase != BreathingPhase.IDLE) {
                         drawCircle(
                             color = themeColor.copy(alpha = 0.4f),
@@ -275,15 +264,11 @@ fun BreathingApp() {
                             sweepAngle = 360f * phaseProgress,
                             useCenter = false,
                             topLeft = Offset(cx - baseRadius - 15f, cy - baseRadius - 15f),
-                            size = androidx.compose.ui.geometry.Size(
-                                (baseRadius + 15f) * 2,
-                                (baseRadius + 15f) * 2
-                            ),
+                            size = Size((baseRadius + 15f) * 2, (baseRadius + 15f) * 2),
                             style = Stroke(width = 3f)
                         )
                     }
 
-                    // Основной круг
                     drawCircle(
                         color = Color.White.copy(alpha = 0.05f),
                         radius = baseRadius,
@@ -323,7 +308,6 @@ fun BreathingApp() {
             Spacer(modifier = Modifier.height(40.dp))
 
             if (!isRunning) {
-                // Выбор времени (скролл)
                 Text(
                     text = "Длительность",
                     fontSize = 14.sp,
@@ -336,11 +320,7 @@ fun BreathingApp() {
                     modifier = Modifier
                         .height(60.dp)
                         .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragEnd = {
-                                    vibrateScroll()
-                                }
-                            ) { _, dragAmount ->
+                            detectVerticalDragGestures { _, dragAmount ->
                                 val change = if (dragAmount < 0) 1 else -1
                                 totalMinutes = (totalMinutes + change).coerceIn(1, 10)
                                 vibrateScroll()
@@ -349,32 +329,19 @@ fun BreathingApp() {
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "▼",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.3f)
-                        )
+                        Text(text = "▼", fontSize = 12.sp, color = Color.White.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "$totalMinutes",
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        Text(text = "$totalMinutes", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (totalMinutes == 1) "минута" 
-                                   else if (totalMinutes in 2..4) "минуты" 
+                            text = if (totalMinutes == 1) "минута"
+                                   else if (totalMinutes in 2..4) "минуты"
                                    else "минут",
                             fontSize = 16.sp,
                             color = Color.White.copy(alpha = 0.6f)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "▲",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.3f)
-                        )
+                        Text(text = "▲", fontSize = 12.sp, color = Color.White.copy(alpha = 0.3f))
                     }
                 }
 
@@ -390,7 +357,6 @@ fun BreathingApp() {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             } else {
-                // Прогресс-бар времени
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = formatTime(elapsedSeconds, totalSeconds),
@@ -398,12 +364,7 @@ fun BreathingApp() {
                         color = Color.White.copy(alpha = 0.5f)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(200.dp)
-                            .height(2.dp)
-                            .background(Color.White.copy(alpha = 0.1f))
-                    ) {
+                    Box(modifier = Modifier.width(200.dp).height(2.dp).background(Color.White.copy(alpha = 0.1f))) {
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -417,7 +378,6 @@ fun BreathingApp() {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Кнопка
             Button(
                 onClick = {
                     if (isRunning) {
@@ -431,9 +391,7 @@ fun BreathingApp() {
                         isRunning = true
                     }
                 },
-                modifier = Modifier
-                    .width(200.dp)
-                    .height(56.dp),
+                modifier = Modifier.width(200.dp).height(56.dp),
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isRunning) Color(0xFFE53935) else Color.White,
@@ -451,20 +409,13 @@ fun BreathingApp() {
     }
 }
 
-data class Particle(
-    val angle: Float,
-    val distance: Float,
-    val alpha: Float,
-    val size: Float
-)
+data class Particle(val angle: Float, val distance: Float, val alpha: Float, val size: Float)
 
 fun vibrateTick(vibrator: Vibrator?) {
-    // Короткий толчок при смене фазы
     vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
 }
 
 fun vibrateHold(vibrator: Vibrator?) {
-    // Двойной толчок при задержке
     vibrator?.vibrate(
         VibrationEffect.createWaveform(
             longArrayOf(0, 50, 50, 50),
@@ -475,7 +426,6 @@ fun vibrateHold(vibrator: Vibrator?) {
 }
 
 fun vibrateLong(vibrator: Vibrator?) {
-    // Завершающая вибрация
     vibrator?.vibrate(
         VibrationEffect.createWaveform(
             longArrayOf(0, 100, 100, 200),
