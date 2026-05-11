@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.HapticFeedbackConstants
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.*
@@ -34,9 +35,31 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            BreathingApp()
+
+        // Показывать приложение на заблокированном экране
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(false)
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
         }
+
+        setContent {
+            BreathingApp(
+                keepScreenOn = {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                },
+                allowScreenOff = {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+        super.onDestroy()
     }
 }
 
@@ -51,7 +74,10 @@ enum class BreathingMode(val label: String, val inhale: Int, val holdIn: Int, va
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BreathingApp() {
+fun BreathingApp(
+    keepScreenOn: () -> Unit = {},
+    allowScreenOff: () -> Unit = {}
+) {
     var phase by remember { mutableStateOf(BreathingPhase.IDLE) }
     var timerText by remember { mutableStateOf("4") }
     var isRunning by remember { mutableStateOf(false) }
@@ -71,7 +97,6 @@ fun BreathingApp() {
     val glowAlpha = remember { Animatable(0.3f) }
     val particles = remember { mutableStateListOf<Particle>() }
 
-    // Плавный скролл с вибрацией при каждой смене минуты
     var scrollValue by remember { mutableFloatStateOf(totalMinutes.toFloat()) }
     var lastVibratedMinute by remember { mutableIntStateOf(totalMinutes) }
 
@@ -89,6 +114,15 @@ fun BreathingApp() {
         BreathingPhase.EXHALE -> Color(0xFF0A1A0A)
         BreathingPhase.HOLD_OUT -> Color(0xFF1A0A1A)
         BreathingPhase.IDLE -> Color(0xFF121212)
+    }
+
+    // Управление подсветкой только во время сеанса
+    LaunchedEffect(isRunning) {
+        if (isRunning) {
+            keepScreenOn()
+        } else {
+            allowScreenOff()
+        }
     }
 
     LaunchedEffect(phase) {
@@ -349,7 +383,6 @@ fun BreathingApp() {
                                 onVerticalDrag = { _, dragAmount ->
                                     val newValue = (scrollValue - dragAmount / 50f).coerceIn(1f, 10f)
                                     val newMinute = newValue.roundToInt()
-                                    // Вибрация при каждой смене минуты
                                     if (newMinute != lastVibratedMinute) {
                                         lastVibratedMinute = newMinute
                                         vibrateScroll()
