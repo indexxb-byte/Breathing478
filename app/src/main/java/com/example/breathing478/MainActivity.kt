@@ -1,8 +1,11 @@
 package com.example.breathing478
 
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibrationAttributes
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -33,11 +36,15 @@ import kotlin.random.Random
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    private lateinit var vibrator: Vibrator
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Показывать приложение на заблокированном экране
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+        vibrator = getSystemService(Vibrator::class.java)
+
+        // Показывать на заблокированном экране
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(false)
         } else {
@@ -46,6 +53,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BreathingApp(
+                vibrator = vibrator,
                 keepScreenOn = {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 },
@@ -75,6 +83,7 @@ enum class BreathingMode(val label: String, val inhale: Int, val holdIn: Int, va
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BreathingApp(
+    vibrator: Vibrator,
     keepScreenOn: () -> Unit = {},
     allowScreenOff: () -> Unit = {}
 ) {
@@ -91,7 +100,6 @@ fun BreathingApp(
 
     val context = LocalContext.current
     val view = LocalView.current
-    val vibrator = context.getSystemService(Vibrator::class.java)
 
     val animatedScale = remember { Animatable(0.35f) }
     val glowAlpha = remember { Animatable(0.3f) }
@@ -247,7 +255,18 @@ fun BreathingApp(
     }
 
     fun vibrateScroll() {
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        // Системная вибрация вместо haptic — работает на заблокированном экране
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(
+                    30,
+                    VibrationEffect.DEFAULT_AMPLITUDE
+                )
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(30)
+        }
     }
 
     Box(
@@ -472,15 +491,44 @@ fun BreathingApp(
 data class Particle(val angle: Float, val distance: Float, val alpha: Float, val size: Float)
 
 fun vibrateTick(vibrator: Vibrator?) {
-    vibrator?.vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator?.vibrate(
+            VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE)
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator?.vibrate(80)
+    }
 }
 
 fun vibrateHold(vibrator: Vibrator?) {
-    vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 50, 50, 50), intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE), -1))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator?.vibrate(
+            VibrationEffect.createWaveform(
+                longArrayOf(0, 50, 50, 50),
+                intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE),
+                -1
+            )
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator?.vibrate(longArrayOf(0, 50, 50, 50), -1)
+    }
 }
 
 fun vibrateLong(vibrator: Vibrator?) {
-    vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 100, 100, 200), intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 80, VibrationEffect.DEFAULT_AMPLITUDE), -1))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator?.vibrate(
+            VibrationEffect.createWaveform(
+                longArrayOf(0, 100, 100, 200),
+                intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 80, VibrationEffect.DEFAULT_AMPLITUDE),
+                -1
+            )
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator?.vibrate(longArrayOf(0, 100, 100, 200), -1)
+    }
 }
 
 fun formatTime(elapsed: Int, total: Int): String {
