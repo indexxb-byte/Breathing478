@@ -120,15 +120,15 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
-                        val id = database.sessionDao().insertReminder(reminder)
-                        val newId = database.sessionDao().insertReminder(reminder)
+    TextButton(onClick = {
+        scope.launch {
+            val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
+            val newId = database.sessionDao().insertReminder(reminder)
+            val newId = database.sessionDao().insertReminder(reminder)
 scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, newId.toInt())
-                    }
-                    showTimePicker = false
-                }) { Text("Сохранить", color = Color(0xFF81C784)) }
+        }
+        showTimePicker = false
+    }) { Text("Сохранить", color = Color(0xFF81C784)) }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) { Text("Отмена", color = Color.White.copy(alpha = 0.5f)) }
