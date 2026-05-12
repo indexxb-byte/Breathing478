@@ -124,7 +124,8 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
                     scope.launch {
                         val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
                         val id = database.sessionDao().insertReminder(reminder)
-                        scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, id.toInt())
+                        val newId = database.sessionDao().insertReminder(reminder)
+scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, newId.toInt())
                     }
                     showTimePicker = false
                 }) { Text("Сохранить", color = Color(0xFF81C784)) }
