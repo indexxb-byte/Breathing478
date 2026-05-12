@@ -2,6 +2,7 @@ package com.example.breathing478
 
 import android.Manifest
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -96,22 +97,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("history") {
-                            HistoryScreen(
-                                database = database,
-                                onBack = { navController.popBackStack() }
-                            )
+                            HistoryScreen(database = database, onBack = { navController.popBackStack() })
                         }
                         composable("reminders") {
-                            RemindersScreen(
-                                database = database,
-                                onBack = { navController.popBackStack() }
-                            )
+                            RemindersScreen(database = database, onBack = { navController.popBackStack() })
                         }
                         composable("constructor") {
-                            ConstructorScreen(
-                                database = database,
-                                onBack = { navController.popBackStack() }
-                            )
+                            ConstructorScreen(database = database, onBack = { navController.popBackStack() })
                         }
                         composable("settings") {
                             SettingsScreen(
