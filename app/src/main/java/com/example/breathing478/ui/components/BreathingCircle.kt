@@ -1,3 +1,4 @@
+import com.example.breathing478.BreathingPhase
 package com.example.breathing478.ui.components
 
 import androidx.compose.animation.core.*
