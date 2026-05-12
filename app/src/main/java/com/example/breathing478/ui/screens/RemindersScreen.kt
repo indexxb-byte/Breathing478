@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.breathing478.data.AppDatabase
 import com.example.breathing478.data.ReminderEntity
+import com.example.breathing478.ui.components.TimeScroller
 import com.example.breathing478.utils.cancelReminder
 import com.example.breathing478.utils.scheduleReminder
 import kotlinx.coroutines.launch
@@ -33,71 +34,48 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
     var showTimePicker by remember { mutableStateOf(false) }
     var selectedHour by remember { mutableIntStateOf(8) }
     var selectedMinute by remember { mutableIntStateOf(0) }
+    var selectedDays by remember { mutableIntStateOf(0b1111111) }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFF121212))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White)
-            }
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад", tint = Color.White) }
             Text("Напоминания", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
 
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
             items(reminders) { reminder ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Switch(
-                            checked = reminder.enabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch {
-                                    val updated = reminder.copy(enabled = enabled)
-                                    database.sessionDao().updateReminder(updated)
-                                    val requestCode = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
-                                    if (enabled) scheduleReminder(context, reminder.hour, reminder.minute, reminder.days, requestCode)
-                                    else cancelReminder(context, requestCode)
-                                }
-                            },
-                            colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF81C784))
-                        )
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f)), shape = RoundedCornerShape(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = reminder.enabled, onCheckedChange = { enabled ->
+                            scope.launch {
+                                val updated = reminder.copy(enabled = enabled)
+                                database.sessionDao().updateReminder(updated)
+                                val rc = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
+                                if (enabled) scheduleReminder(context, reminder.hour, reminder.minute, reminder.days, rc)
+                                else cancelReminder(context, rc)
+                            }
+                        }, colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF81C784)))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            "${reminder.hour.toString().padStart(2, '0')}:${reminder.minute.toString().padStart(2, '0')}",
-                            fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White
-                        )
+                        Text("${reminder.hour.toString().padStart(2,'0')}:${reminder.minute.toString().padStart(2,'0')}",
+                            fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            daysOfWeek.filterIndexed { i, _ -> (reminder.days shr i) and 1 == 1 }.joinToString(", "),
-                            fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f)
-                        )
+                        Text(daysOfWeek.filterIndexed { i, _ -> (reminder.days shr i) and 1 == 1 }.joinToString(", "),
+                            fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f))
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(onClick = {
                             scope.launch {
-                                val requestCode = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
-                                cancelReminder(context, requestCode)
+                                val rc = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
+                                cancelReminder(context, rc)
                                 database.sessionDao().deleteReminder(reminder)
                             }
-                        }) {
-                            Icon(Icons.Default.Delete, "Удалить", tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
-                        }
+                        }) { Icon(Icons.Default.Delete, "Удалить", tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp)) }
                     }
                 }
             }
             item {
-                TextButton(
-                    onClick = { showTimePicker = true },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF81C784))
-                ) {
+                TextButton(onClick = { showTimePicker = true }, modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF81C784))) {
                     Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Добавить время", fontSize = 16.sp)
@@ -113,31 +91,37 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
             title = { Text("Выберите время", color = Color.White) },
             text = {
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { selectedHour = (selectedHour - 1).coerceIn(0, 23) }) {
-                            Text("−", fontSize = 24.sp, color = Color.White)
-                        }
+                    // Скролл часов
+                    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectedHour = (selectedHour - 1).coerceIn(0, 23) }) { Text("−", fontSize = 24.sp, color = Color.White) }
                         Text(selectedHour.toString().padStart(2, '0'), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 24.dp))
-                        IconButton(onClick = { selectedHour = (selectedHour + 1).coerceIn(0, 23) }) {
-                            Text("+", fontSize = 24.sp, color = Color.White)
-                        }
+                        IconButton(onClick = { selectedHour = (selectedHour + 1).coerceIn(0, 23) }) { Text("+", fontSize = 24.sp, color = Color.White) }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { selectedMinute = (selectedMinute - 1).coerceIn(0, 59) }) {
-                            Text("−", fontSize = 24.sp, color = Color.White)
-                        }
+                    Text(":", fontSize = 24.sp, color = Color.White, modifier = Modifier.align(Alignment.CenterHorizontally))
+                    // Скролл минут
+                    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selectedMinute = (selectedMinute - 5).coerceIn(0, 55) }) { Text("−", fontSize = 24.sp, color = Color.White) }
                         Text(selectedMinute.toString().padStart(2, '0'), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 24.dp))
-                        IconButton(onClick = { selectedMinute = (selectedMinute + 1).coerceIn(0, 59) }) {
-                            Text("+", fontSize = 24.sp, color = Color.White)
+                        IconButton(onClick = { selectedMinute = (selectedMinute + 5).coerceIn(0, 55) }) { Text("+", fontSize = 24.sp, color = Color.White) }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Дни:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Выбор дней
+                    Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                        daysOfWeek.forEachIndexed { index, dayName ->
+                            val mask = 1 shl index
+                            val isSelected = (selectedDays and mask) != 0
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedDays = selectedDays xor mask },
+                                label = { Text(dayName, fontSize = 12.sp, color = if(isSelected) Color(0xFF1A1A1A) else Color.White) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF81C784),
+                                    containerColor = Color.White.copy(alpha = 0.08f)
+                                )
+                            )
                         }
                     }
                 }
@@ -145,17 +129,15 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
+                        val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute, days = selectedDays)
                         database.sessionDao().insertReminder(reminder)
-                        val requestCode = (selectedHour * 100 + selectedMinute) * 100
-                        scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, requestCode)
+                        val rc = (selectedHour * 100 + selectedMinute) * 100
+                        scheduleReminder(context, selectedHour, selectedMinute, selectedDays, rc)
                     }
                     showTimePicker = false
                 }) { Text("Сохранить", color = Color(0xFF81C784)) }
             },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Отмена", color = Color.White.copy(alpha = 0.5f)) }
-            }
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Отмена", color = Color.White.copy(alpha = 0.5f)) } }
         )
     }
 }
