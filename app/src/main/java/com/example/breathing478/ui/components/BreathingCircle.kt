@@ -1,4 +1,3 @@
-import com.example.breathing478.BreathingPhase
 package com.example.breathing478.ui.components
 
 import androidx.compose.animation.core.*
@@ -29,7 +28,6 @@ fun BreathingCircle(
     isRunning: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Анимация масштаба
     val targetScale = when {
         !isRunning -> 0.35f
         phase == BreathingPhase.INHALE -> 1f
@@ -49,7 +47,6 @@ fun BreathingCircle(
 
     LaunchedEffect(targetScale, isRunning) {
         if (!isRunning) {
-            // Медленное дыхание в меню
             while (!isRunning) {
                 animatedScale.animateTo(0.42f, tween(3000, easing = FastOutSlowInEasing))
                 animatedScale.animateTo(0.35f, tween(3000, easing = FastOutSlowInEasing))
@@ -65,7 +62,6 @@ fun BreathingCircle(
             val cy = size.height / 2
             val baseRadius = size.width / 2 * animatedScale.value
 
-            // Свечение
             for (i in 3 downTo 0) {
                 drawCircle(
                     color = themeColor.copy(alpha = 0.03f),
@@ -74,7 +70,6 @@ fun BreathingCircle(
                 )
             }
 
-            // Кольцо прогресса
             if (phase != BreathingPhase.IDLE && isRunning) {
                 drawCircle(
                     color = themeColor.copy(alpha = 0.4f),
