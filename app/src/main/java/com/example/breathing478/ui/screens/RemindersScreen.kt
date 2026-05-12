@@ -41,7 +41,6 @@ fun RemindersScreen(
     var selectedMinute by remember { mutableIntStateOf(0) }
     var selectedDays by remember { mutableIntStateOf(0b1111111) }
 
-    // Запрос разрешений при первом входе на экран
     LaunchedEffect(Unit) {
         requestExactAlarm()
         requestNotifications()
@@ -71,7 +70,7 @@ fun RemindersScreen(
                             }
                         }, colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF81C784)))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("${reminder.hour.toString().padStart(2, '0')}:${reminder.minute.toString().padStart(2, '0')}",
+                        Text("${reminder.hour.toString().padStart(2,'0')}:${reminder.minute.toString().padStart(2,'0')}",
                             fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(daysOfWeek.filterIndexed { i, _ -> (reminder.days shr i) and 1 == 1 }.joinToString(", "),
@@ -117,9 +116,7 @@ fun RemindersScreen(
                     Text("Часы", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(4.dp))
                     TimeScroller(
-                        vibrator = null,
-                        value = selectedHour,
-                        min = 0, max = 23,
+                        value = selectedHour, min = 0, max = 23,
                         formatValue = { it.toString().padStart(2, '0') },
                         onValueChange = { selectedHour = it }
                     )
@@ -127,11 +124,9 @@ fun RemindersScreen(
                     Text("Минуты", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(4.dp))
                     TimeScroller(
-                        vibrator = null,
-                        value = selectedMinute,
-                        min = 0, max = 55,
-                        formatValue = { (it - it % 5).toString().padStart(2, '0') },
-                        onValueChange = { selectedMinute = it - it % 5 }
+                        value = selectedMinute, min = 0, max = 59,
+                        formatValue = { it.toString().padStart(2, '0') },
+                        onValueChange = { selectedMinute = it }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Дни:", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
@@ -143,7 +138,7 @@ fun RemindersScreen(
                             FilterChip(
                                 selected = isSelected,
                                 onClick = { selectedDays = selectedDays xor mask },
-                                label = { Text(dayName, fontSize = 12.sp, color = if (isSelected) Color(0xFF1A1A1A) else Color.White) },
+                                label = { Text(dayName, fontSize = 12.sp, color = if(isSelected) Color(0xFF1A1A1A) else Color.White) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = Color(0xFF81C784),
                                     containerColor = Color.White.copy(alpha = 0.08f)
