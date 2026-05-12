@@ -14,8 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,13 +57,13 @@ fun HomeScreen(
     var elapsedSeconds by remember { mutableStateOf(0) }
     var totalMinutes by remember { mutableStateOf(3) }
     var totalSeconds by remember { mutableStateOf(180) }
-    var selectedMode by remember { mutableStateOf<Any>(BreathingMode.MODE_478) }
+    var selectedModeLabel by remember { mutableStateOf("4-7-8") }
+    var selectedModeInhale by remember { mutableIntStateOf(4) }
+    var selectedModeHoldIn by remember { mutableIntStateOf(7) }
+    var selectedModeExhale by remember { mutableIntStateOf(8) }
+    var selectedModeHoldOut by remember { mutableIntStateOf(0) }
 
     val customModes by database.sessionDao().getAllCustomModes().collectAsState(initial = emptyList())
-    val allModes = remember(customModes) {
-        listOf(BreathingMode.MODE_478, BreathingMode.MODE_4444) + customModes
-    }
-
     val particles = remember { mutableStateListOf<Particle>() }
     val scope = rememberCoroutineScope()
 
@@ -82,14 +83,11 @@ fun HomeScreen(
         BreathingPhase.IDLE -> Color(0xFF121212)
     }
 
-    // Частицы
     LaunchedEffect(isRunning, phase) {
         while (true) {
             if (isRunning || particles.size < 15) {
                 if (particles.size < 30) {
-                    particles.add(
-                        Particle(Random.nextFloat() * 360f, Random.nextFloat() * 200f, 0f, Random.nextFloat() * 2f + 1f)
-                    )
+                    particles.add(Particle(Random.nextFloat() * 360f, Random.nextFloat() * 200f, 0f, Random.nextFloat() * 2f + 1f))
                 }
             }
             particles.forEachIndexed { i, p ->
@@ -107,80 +105,63 @@ fun HomeScreen(
         }
     }
 
-    // Логика сеанса
     LaunchedEffect(isRunning) {
         if (!isRunning) {
-            phase = BreathingPhase.IDLE; timerText = "4"; phaseLabel = "Готовы?"
-            elapsedSeconds = 0
+            phase = BreathingPhase.IDLE; timerText = "4"; phaseLabel = "Готовы?"; elapsedSeconds = 0
             return@LaunchedEffect
         }
 
         elapsedSeconds = 0; totalSeconds = totalMinutes * 60
-
-        val mode = when (selectedMode) {
-            is BreathingMode -> selectedMode as BreathingMode
-            is CustomModeEntity -> BreathingMode("custom", (selectedMode as CustomModeEntity).inhale,
-                (selectedMode as CustomModeEntity).holdIn, (selectedMode as CustomModeEntity).exhale,
-                (selectedMode as CustomModeEntity).holdOut)
-            else -> BreathingMode.MODE_478
-        }
-        val cycleDuration = mode.inhale + mode.holdIn + mode.exhale + mode.holdOut
+        val cycleDuration = selectedModeInhale + selectedModeHoldIn + selectedModeExhale + selectedModeHoldOut
 
         while (isRunning) {
             if (elapsedSeconds + cycleDuration > totalSeconds) break
 
             phase = BreathingPhase.INHALE; phaseLabel = "Вдох"
             VibrationManager.vibrateTick(vibrator)
-            for (i in 1..mode.inhale) {
+            for (i in 1..selectedModeInhale) {
                 if (!isRunning) return@LaunchedEffect
-                timerText = (mode.inhale + 1 - i).toString(); phaseProgress = i.toFloat() / mode.inhale
+                timerText = (selectedModeInhale + 1 - i).toString(); phaseProgress = i.toFloat() / selectedModeInhale
                 delay(1000); elapsedSeconds++
             }
 
-            if (mode.holdIn > 0) {
+            if (selectedModeHoldIn > 0) {
                 phase = BreathingPhase.HOLD_IN; phaseLabel = "Задержка"
                 VibrationManager.vibrateHold(vibrator)
-                for (i in 1..mode.holdIn) {
+                for (i in 1..selectedModeHoldIn) {
                     if (!isRunning) return@LaunchedEffect
-                    timerText = (mode.holdIn + 1 - i).toString(); phaseProgress = i.toFloat() / mode.holdIn
+                    timerText = (selectedModeHoldIn + 1 - i).toString(); phaseProgress = i.toFloat() / selectedModeHoldIn
                     delay(1000); elapsedSeconds++
                 }
             }
 
             phase = BreathingPhase.EXHALE; phaseLabel = "Выдох"
             VibrationManager.vibrateTick(vibrator)
-            for (i in 1..mode.exhale) {
+            for (i in 1..selectedModeExhale) {
                 if (!isRunning) return@LaunchedEffect
-                timerText = (mode.exhale + 1 - i).toString(); phaseProgress = i.toFloat() / mode.exhale
+                timerText = (selectedModeExhale + 1 - i).toString(); phaseProgress = i.toFloat() / selectedModeExhale
                 delay(1000); elapsedSeconds++
             }
 
-            if (mode.holdOut > 0) {
+            if (selectedModeHoldOut > 0) {
                 phase = BreathingPhase.HOLD_OUT; phaseLabel = "Пауза"
                 VibrationManager.vibrateHold(vibrator)
-                for (i in 1..mode.holdOut) {
+                for (i in 1..selectedModeHoldOut) {
                     if (!isRunning) return@LaunchedEffect
-                    timerText = (mode.holdOut + 1 - i).toString(); phaseProgress = i.toFloat() / mode.holdOut
+                    timerText = (selectedModeHoldOut + 1 - i).toString(); phaseProgress = i.toFloat() / selectedModeHoldOut
                     delay(1000); elapsedSeconds++
                 }
             }
         }
 
-        // Сохранение сессии
         scope.launch {
-            database.sessionDao().insert(
-                SessionEntity(
-                    timestamp = System.currentTimeMillis(),
-                    modeName = when (selectedMode) {
-                        is BreathingMode -> (selectedMode as BreathingMode).label
-                        is CustomModeEntity -> (selectedMode as CustomModeEntity).name
-                        else -> "4-7-8"
-                    },
-                    durationMinutes = totalMinutes,
-                    elapsedSeconds = elapsedSeconds,
-                    completed = elapsedSeconds >= totalSeconds
-                )
-            )
+            database.sessionDao().insert(SessionEntity(
+                timestamp = System.currentTimeMillis(),
+                modeName = selectedModeLabel,
+                durationMinutes = totalMinutes,
+                elapsedSeconds = elapsedSeconds,
+                completed = elapsedSeconds >= totalSeconds
+            ))
         }
 
         isRunning = false; phase = BreathingPhase.IDLE
@@ -191,7 +172,6 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
-        // Фон с частицами
         Canvas(modifier = Modifier.fillMaxSize()) {
             particles.forEach { p ->
                 val rad = Math.toRadians(p.angle.toDouble())
@@ -203,40 +183,43 @@ fun HomeScreen(
             }
         }
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(modifier = Modifier.weight(1f))
 
             if (!isRunning) {
-                // Заголовок
-                val modeLabel = when (selectedMode) {
-                    is BreathingMode -> (selectedMode as BreathingMode).label
-                    is CustomModeEntity -> (selectedMode as CustomModeEntity).name
-                    else -> "4-7-8"
-                }
-                Text(modeLabel, fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.9f), letterSpacing = 8.sp)
+                Text(selectedModeLabel, fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.9f), letterSpacing = 8.sp)
                 Text("ДЫХАНИЕ", fontSize = 16.sp, fontWeight = FontWeight.Light, color = Color.White.copy(alpha = 0.5f), letterSpacing = 12.sp)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Чипсы режимов (горизонтальный скролл)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    allModes.forEach { mode ->
-                        val isSelected = when {
-                            mode is BreathingMode && selectedMode is BreathingMode -> mode == selectedMode
-                            mode is CustomModeEntity && selectedMode is CustomModeEntity -> mode.id == (selectedMode as CustomModeEntity).id
-                            else -> false
-                        }
-                        val label = when (mode) {
-                            is BreathingMode -> mode.label
-                            is CustomModeEntity -> mode.name
-                            else -> ""
-                        }
+                    listOf(BreathingMode.MODE_478, BreathingMode.MODE_4444).forEach { mode ->
                         FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedMode = mode },
-                            label = { Text(label, fontSize = 13.sp, color = Color.White) },
+                            selected = selectedModeLabel == mode.label,
+                            onClick = {
+                                selectedModeLabel = mode.label
+                                selectedModeInhale = mode.inhale
+                                selectedModeHoldIn = mode.holdIn
+                                selectedModeExhale = mode.exhale
+                                selectedModeHoldOut = mode.holdOut
+                            },
+                            label = { Text(mode.label, fontSize = 13.sp, color = Color.White) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color.White.copy(alpha = 0.25f),
+                                containerColor = Color.White.copy(alpha = 0.08f)
+                            )
+                        )
+                    }
+                    customModes.forEach { mode ->
+                        FilterChip(
+                            selected = selectedModeLabel == mode.name,
+                            onClick = {
+                                selectedModeLabel = mode.name
+                                selectedModeInhale = mode.inhale
+                                selectedModeHoldIn = mode.holdIn
+                                selectedModeExhale = mode.exhale
+                                selectedModeHoldOut = mode.holdOut
+                            },
+                            label = { Text(mode.name, fontSize = 13.sp, color = Color.White) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color.White.copy(alpha = 0.25f),
                                 containerColor = Color.White.copy(alpha = 0.08f)
@@ -247,32 +230,17 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Круг
-            BreathingCircle(
-                phase = phase,
-                timerText = timerText,
-                phaseLabel = phaseLabel,
-                phaseProgress = phaseProgress,
-                themeColor = themeColor,
-                isRunning = isRunning
-            )
-
+            BreathingCircle(phase, timerText, phaseLabel, phaseProgress, themeColor, isRunning)
             Spacer(modifier = Modifier.height(24.dp))
 
             if (!isRunning) {
-                TimeScroller(
-                    label = "Длительность",
-                    value = totalMinutes,
-                    min = 1, max = 10,
-                    suffix = when(totalMinutes) { 1->"минута"; in 2..4->"минуты"; else->"минут" },
-                    vibrator = vibrator,
-                    onValueChange = { totalMinutes = it }
-                )
+                TimeScroller(label = "Длительность", value = totalMinutes, min = 1, max = 10,
+                    suffix = when(totalMinutes){1->"минута"; in 2..4->"минуты"; else->"минут"},
+                    vibrator = vibrator, onValueChange = { totalMinutes = it })
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val remain = (totalSeconds - elapsedSeconds).coerceAtLeast(0)
-                    Text("Осталось ${remain/60}:${(remain%60).toString().padStart(2,'0')}",
-                        fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
+                    Text("Осталось ${remain/60}:${(remain%60).toString().padStart(2,'0')}", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(8.dp))
                     Box(Modifier.width(200.dp).height(2.dp).background(Color.White.copy(alpha = 0.1f))) {
                         Box(Modifier.fillMaxHeight().fillMaxWidth(elapsedSeconds.toFloat()/totalSeconds).background(themeColor))
@@ -281,7 +249,6 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
             Button(
                 onClick = {
                     if (isRunning) { isRunning = false; phase = BreathingPhase.IDLE; timerText = "4"; phaseLabel = "Готовы?"; elapsedSeconds = 0 }
@@ -290,19 +257,15 @@ fun HomeScreen(
                 modifier = Modifier.width(200.dp).height(56.dp),
                 shape = RoundedCornerShape(28.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRunning) Color(0xFFE53935) else Color.White,
-                    contentColor = if (isRunning) Color.White else Color(0xFF0D1B2A)
+                    containerColor = if(isRunning) Color(0xFFE53935) else Color.White,
+                    contentColor = if(isRunning) Color.White else Color(0xFF0D1B2A)
                 )
             ) { Text(if(isRunning) "ЗАВЕРШИТЬ" else "НАЧАТЬ", fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp) }
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Нижние кнопки
             if (!isRunning) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     BottomIconButton(Icons.Default.CalendarMonth, "История", onNavigateToHistory)
                     BottomIconButton(Icons.Default.Notifications, "Напом.", onNavigateToReminders)
                     BottomIconButton(Icons.Default.Edit, "Констр.", onNavigateToConstructor)
@@ -315,11 +278,8 @@ fun HomeScreen(
 
 @Composable
 fun BottomIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick).padding(8.dp)
-    ) {
-        Icon(icon, contentDescription = label, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(28.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick).padding(8.dp)) {
+        Icon(icon, label, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(28.dp))
         Text(label, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f))
     }
 }
