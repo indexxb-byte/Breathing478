@@ -1,12 +1,13 @@
 package com.example.breathing478
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Vibrator
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,6 +40,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val exactAlarmPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Пользователь вернулся из настроек — проверять не будем, просто продолжим
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -62,7 +69,6 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val navController = rememberNavController()
-
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
                             HomeScreen(
@@ -72,10 +78,7 @@ class MainActivity : ComponentActivity() {
                                 onToggleVibeOnLock = { enable ->
                                     if (enable) {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            if (ContextCompat.checkSelfPermission(
-                                                    this@MainActivity, Manifest.permission.POST_NOTIFICATIONS
-                                                ) != PackageManager.PERMISSION_GRANTED
-                                            ) {
+                                            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                             } else {
                                                 startBreathingService()
@@ -100,7 +103,26 @@ class MainActivity : ComponentActivity() {
                             HistoryScreen(database = database, onBack = { navController.popBackStack() })
                         }
                         composable("reminders") {
-                            RemindersScreen(database = database, onBack = { navController.popBackStack() })
+                            RemindersScreen(
+                                database = database,
+                                requestExactAlarm = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+                                        if (!alarmManager.canScheduleExactAlarms()) {
+                                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                            exactAlarmPermissionLauncher.launch(intent)
+                                        }
+                                    }
+                                },
+                                requestNotifications = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    }
+                                },
+                                onBack = { navController.popBackStack() }
+                            )
                         }
                         composable("constructor") {
                             ConstructorScreen(database = database, onBack = { navController.popBackStack() })
@@ -109,8 +131,7 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 onBack = { navController.popBackStack() },
                                 onIntensityChanged = { intensity ->
-                                    getSharedPreferences("settings", MODE_PRIVATE)
-                                        .edit().putFloat("vibration_intensity", intensity).apply()
+                                    getSharedPreferences("settings", MODE_PRIVATE).edit().putFloat("vibration_intensity", intensity).apply()
                                     VibrationManager.setIntensity(intensity)
                                 }
                             )
