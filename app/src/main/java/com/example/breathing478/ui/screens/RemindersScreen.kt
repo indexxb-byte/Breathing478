@@ -62,8 +62,9 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
                                 scope.launch {
                                     val updated = reminder.copy(enabled = enabled)
                                     database.sessionDao().updateReminder(updated)
-                                    if (enabled) scheduleReminder(context, reminder.hour, reminder.minute, reminder.days, reminder.id.toInt())
-                                    else cancelReminder(context, reminder.id.toInt())
+                                    val requestCode = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
+                                    if (enabled) scheduleReminder(context, reminder.hour, reminder.minute, reminder.days, requestCode)
+                                    else cancelReminder(context, requestCode)
                                 }
                             },
                             colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF81C784))
@@ -81,7 +82,8 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(onClick = {
                             scope.launch {
-                                cancelReminder(context, reminder.id.toInt())
+                                val requestCode = (reminder.hour * 100 + reminder.minute) * 100 + reminder.id.toInt()
+                                cancelReminder(context, requestCode)
                                 database.sessionDao().deleteReminder(reminder)
                             }
                         }) {
@@ -144,8 +146,9 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
                 TextButton(onClick = {
                     scope.launch {
                         val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
-                        val newId = database.sessionDao().insertReminder(reminder)
-                        scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, newId.toInt())
+                        database.sessionDao().insertReminder(reminder)
+                        val requestCode = (selectedHour * 100 + selectedMinute) * 100
+                        scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, requestCode)
                     }
                     showTimePicker = false
                 }) { Text("Сохранить", color = Color(0xFF81C784)) }
