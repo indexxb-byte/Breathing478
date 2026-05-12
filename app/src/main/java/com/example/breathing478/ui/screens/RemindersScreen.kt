@@ -1,7 +1,6 @@
 package com.example.breathing478.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,7 +21,6 @@ import com.example.breathing478.data.ReminderEntity
 import com.example.breathing478.utils.cancelReminder
 import com.example.breathing478.utils.scheduleReminder
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +104,6 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
         }
     }
 
-    // TimePicker диалог
     if (showTimePicker) {
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
@@ -114,49 +111,48 @@ fun RemindersScreen(database: AppDatabase, onBack: () -> Unit) {
             title = { Text("Выберите время", color = Color.White) },
             text = {
                 Column {
-                    TimeScrollerHour(vibrator = null, value = selectedHour, onValueChange = { selectedHour = it })
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { selectedHour = (selectedHour - 1).coerceIn(0, 23) }) {
+                            Text("−", fontSize = 24.sp, color = Color.White)
+                        }
+                        Text(selectedHour.toString().padStart(2, '0'), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 24.dp))
+                        IconButton(onClick = { selectedHour = (selectedHour + 1).coerceIn(0, 23) }) {
+                            Text("+", fontSize = 24.sp, color = Color.White)
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
-                    TimeScrollerHour(vibrator = null, value = selectedMinute, min = 0, max = 59, formatValue = { it.toString().padStart(2, '0') }, onValueChange = { selectedMinute = it })
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { selectedMinute = (selectedMinute - 1).coerceIn(0, 59) }) {
+                            Text("−", fontSize = 24.sp, color = Color.White)
+                        }
+                        Text(selectedMinute.toString().padStart(2, '0'), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 24.dp))
+                        IconButton(onClick = { selectedMinute = (selectedMinute + 1).coerceIn(0, 59) }) {
+                            Text("+", fontSize = 24.sp, color = Color.White)
+                        }
+                    }
                 }
             },
             confirmButton = {
-    TextButton(onClick = {
-        scope.launch {
-            val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
-            val newId = database.sessionDao().insertReminder(reminder)
-            val newId = database.sessionDao().insertReminder(reminder)
-scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, newId.toInt())
-        }
-        showTimePicker = false
-    }) { Text("Сохранить", color = Color(0xFF81C784)) }
+                TextButton(onClick = {
+                    scope.launch {
+                        val reminder = ReminderEntity(hour = selectedHour, minute = selectedMinute)
+                        val newId = database.sessionDao().insertReminder(reminder)
+                        scheduleReminder(context, selectedHour, selectedMinute, 0b1111111, newId.toInt())
+                    }
+                    showTimePicker = false
+                }) { Text("Сохранить", color = Color(0xFF81C784)) }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) { Text("Отмена", color = Color.White.copy(alpha = 0.5f)) }
             }
         )
-    }
-}
-
-@Composable
-fun TimeScrollerHour(
-    vibrator: android.os.Vibrator? = null,
-    value: Int,
-    min: Int = 0,
-    max: Int = 23,
-    formatValue: (Int) -> String = { it.toString().padStart(2, '0') },
-    onValueChange: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = { onValueChange((value - 1).coerceIn(min, max)) }) {
-            Text("−", fontSize = 24.sp, color = Color.White)
-        }
-        Text(formatValue(value), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(horizontal = 24.dp))
-        IconButton(onClick = { onValueChange((value + 1).coerceIn(min, max)) }) {
-            Text("+", fontSize = 24.sp, color = Color.White)
-        }
     }
 }
