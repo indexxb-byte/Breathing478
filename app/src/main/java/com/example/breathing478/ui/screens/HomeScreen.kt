@@ -1,7 +1,6 @@
 package com.example.breathing478.ui.screens
 
 import android.os.Vibrator
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,15 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.breathing478.BreathingMode
 import com.example.breathing478.BreathingPhase
 import com.example.breathing478.data.AppDatabase
-import com.example.breathing478.data.CustomModeEntity
 import com.example.breathing478.data.SessionEntity
 import com.example.breathing478.ui.components.BreathingCircle
 import com.example.breathing478.ui.components.TimeScroller
@@ -33,7 +29,6 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
-import kotlin.math.roundToInt
 
 data class Particle(val angle: Float, val distance: Float, val alpha: Float, val size: Float)
 
@@ -175,11 +170,8 @@ fun HomeScreen(
         Canvas(modifier = Modifier.fillMaxSize()) {
             particles.forEach { p ->
                 val rad = Math.toRadians(p.angle.toDouble())
-                drawCircle(
-                    color = themeColor.copy(alpha = p.alpha),
-                    radius = p.size,
-                    center = Offset(center.x + cos(rad).toFloat() * p.distance, center.y + sin(rad).toFloat() * p.distance)
-                )
+                drawCircle(color = themeColor.copy(alpha = p.alpha), radius = p.size,
+                    center = Offset(center.x + cos(rad).toFloat() * p.distance, center.y + sin(rad).toFloat() * p.distance))
             }
         }
 
@@ -196,34 +188,22 @@ fun HomeScreen(
                         FilterChip(
                             selected = selectedModeLabel == mode.label,
                             onClick = {
-                                selectedModeLabel = mode.label
-                                selectedModeInhale = mode.inhale
-                                selectedModeHoldIn = mode.holdIn
-                                selectedModeExhale = mode.exhale
-                                selectedModeHoldOut = mode.holdOut
+                                selectedModeLabel = mode.label; selectedModeInhale = mode.inhale
+                                selectedModeHoldIn = mode.holdIn; selectedModeExhale = mode.exhale; selectedModeHoldOut = mode.holdOut
                             },
                             label = { Text(mode.label, fontSize = 13.sp, color = Color.White) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color.White.copy(alpha = 0.25f),
-                                containerColor = Color.White.copy(alpha = 0.08f)
-                            )
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color.White.copy(alpha = 0.25f), containerColor = Color.White.copy(alpha = 0.08f))
                         )
                     }
                     customModes.forEach { mode ->
                         FilterChip(
                             selected = selectedModeLabel == mode.name,
                             onClick = {
-                                selectedModeLabel = mode.name
-                                selectedModeInhale = mode.inhale
-                                selectedModeHoldIn = mode.holdIn
-                                selectedModeExhale = mode.exhale
-                                selectedModeHoldOut = mode.holdOut
+                                selectedModeLabel = mode.name; selectedModeInhale = mode.inhale
+                                selectedModeHoldIn = mode.holdIn; selectedModeExhale = mode.exhale; selectedModeHoldOut = mode.holdOut
                             },
                             label = { Text(mode.name, fontSize = 13.sp, color = Color.White) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color.White.copy(alpha = 0.25f),
-                                containerColor = Color.White.copy(alpha = 0.08f)
-                            )
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color.White.copy(alpha = 0.25f), containerColor = Color.White.copy(alpha = 0.08f))
                         )
                     }
                 }
@@ -235,8 +215,18 @@ fun HomeScreen(
 
             if (!isRunning) {
                 TimeScroller(label = "Длительность", value = totalMinutes, min = 1, max = 10,
-                    suffix = when(totalMinutes){1->"минута"; in 2..4->"минуты"; else->"минут"},
-                    vibrator = vibrator, onValueChange = { totalMinutes = it })
+                    suffix = when(totalMinutes){1->"минута"; in 2..4->"минуты"; else->"минут"}, vibrator = vibrator, onValueChange = { totalMinutes = it })
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Тумблер вибрации на заблокированном
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onToggleVibeOnLock(!vibeOnLockEnabled) }.padding(8.dp)) {
+                    Switch(checked = vibeOnLockEnabled, onCheckedChange = { onToggleVibeOnLock(it) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF81C784)))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Вибро на заблокированном", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
+                }
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     val remain = (totalSeconds - elapsedSeconds).coerceAtLeast(0)
@@ -254,12 +244,8 @@ fun HomeScreen(
                     if (isRunning) { isRunning = false; phase = BreathingPhase.IDLE; timerText = "4"; phaseLabel = "Готовы?"; elapsedSeconds = 0 }
                     else { elapsedSeconds = 0; isRunning = true }
                 },
-                modifier = Modifier.width(200.dp).height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if(isRunning) Color(0xFFE53935) else Color.White,
-                    contentColor = if(isRunning) Color.White else Color(0xFF0D1B2A)
-                )
+                modifier = Modifier.width(200.dp).height(56.dp), shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = if(isRunning) Color(0xFFE53935) else Color.White, contentColor = if(isRunning) Color.White else Color(0xFF0D1B2A))
             ) { Text(if(isRunning) "ЗАВЕРШИТЬ" else "НАЧАТЬ", fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp) }
 
             Spacer(modifier = Modifier.weight(1f))
